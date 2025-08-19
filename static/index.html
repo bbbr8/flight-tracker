@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Flight Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f5f6f8;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 10px;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 8px 12px;
+      box-sizing: border-box;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      padding: 10px 16px;
+      margin-top: 10px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    pre {
+      background-color: #f8f9fa;
+      padding: 10px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Flight Tracker</h1>
+    <label for="callsign">Enter flight callsign (e.g., AA123):</label>
+    <input id="callsign" type="text" placeholder="Enter flight number..." />
+    <button onclick="trackFlight()">Track Flight</button>
+    <pre id="output">Enter a flight callsign to see its current position.</pre>
+  </div>
+  <script>
+    async function trackFlight() {
+      const input = document.getElementById('callsign');
+      const callsign = input.value.trim();
+      const output = document.getElementById('output');
+      if (!callsign) {
+        output.textContent = 'Please enter a flight callsign.';
+        return;
+      }
+      output.textContent = 'Loading...';
+      try {
+        const response = await fetch(`/track?callsign=${encodeURIComponent(callsign)}`);
+        if (!response.ok) {
+          const errData = await response.json();
+          output.textContent = errData.detail || 'Failed to fetch flight data.';
+          return;
+        }
+        const data = await response.json();
+        output.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        output.textContent = 'Error: ' + err.message;
+      }
+    }
+  </script>
+</body>
+</html>
