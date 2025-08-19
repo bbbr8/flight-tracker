@@ -1,89 +1,86 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="utf-8" />
-  <title>Flight Tracker</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Advanced Flight Tracker</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+    integrity="sha256-sA+tdDEIP6XW8oHnSyTjWNY/sLhWyXnR8lGYe3oRrF0=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
+    integrity="sha256-pvG5DwKBOI0i+YAkn8DQaY9ZVUZE+wSP1srbVW/ticA=" crossorigin=""></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 20px;
-      background-color: #f5f6f8;
-    }
-    .container {
-      max-width: 600px;
-      margin: 0 auto;
-      background-color: #fff;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-    h1 {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    label {
-      display: block;
-      margin-bottom: 10px;
-    }
-    input[type="text"] {
-      width: 100%;
-      padding: 8px 12px;
-      box-sizing: border-box;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-    button {
-      background-color: #007bff;
-      color: #fff;
-      border: none;
-      padding: 10px 16px;
-      margin-top: 10px;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #0056b3;
-    }
-    pre {
-      background-color: #f8f9fa;
-      padding: 10px;
-      border-radius: 4px;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-    }
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #map { height: 400px; margin-bottom: 20px; }
+    .controls { margin-bottom: 10px; }
+    .flight-list { max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; }
+    .flight-item { cursor: pointer; padding: 4px; border-bottom: 1px solid #eee; }
+    .flight-item:hover { background: #f0f0f0; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Flight Tracker</h1>
-    <label for="callsign">Enter flight callsign (e.g., AA123):</label>
-    <input id="callsign" type="text" placeholder="Enter flight number..." />
-    <button onclick="trackFlight()">Track Flight</button>
-    <pre id="output">Enter a flight callsign to see its current position.</pre>
+  <h1>Advanced Flight Tracker</h1>
+  <div class="controls">
+    <label for="state-select">State:</label>
+    <select id="state-select">
+      <option value="">--Select a state--</option>
+      <option value="37,-114,42,-109">Utah</option>
+      <option value="37,-109,41,-102">Colorado</option>
+      <option value="31.33,-114.82,37,-109">Arizona</option>
+    </select>
+    <button onclick="searchRegion()">Search</button>
+    <input id="callsign-input" placeholder="Track callsign (e.g. SWA3275)" />
+    <button onclick="trackCallsign()">Track</button>
   </div>
+  <div id="map"></div>
+  <div id="flight-list" class="flight-list"></div>
   <script>
-    async function trackFlight() {
-      const input = document.getElementById('callsign');
-      const callsign = input.value.trim();
-      const output = document.getElementById('output');
-      if (!callsign) {
-        output.textContent = 'Please enter a flight callsign.';
-        return;
+    const map = L.map('map').setView([39.5, -98.35], 4);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+    let markers = [];
+    function clearMarkers() {
+      markers.forEach(marker => map.removeLayer(marker));
+      markers = [];
+    }
+    function addMarker(flight) {
+      const marker = L.marker([flight.latitude, flight.longitude]).addTo(map);
+      marker.bindPopup(`<b>${flight.callsign || flight.icao24}</b><br>Altitude: ${flight.altitude}<br>Origin: ${flight.origin_country}`);
+      markers.push(marker);
+    }
+    async function searchRegion() {
+      const val = document.getElementById('state-select').value;
+      if (!val) {
+        alert('Select a state first.'); return;
       }
-      output.textContent = 'Loading...';
-      try {
-        const response = await fetch(`/track?callsign=${encodeURIComponent(callsign)}`);
-        if (!response.ok) {
-          const errData = await response.json();
-          output.textContent = errData.detail || 'Failed to fetch flight data.';
-          return;
-        }
-        const data = await response.json();
-        output.textContent = JSON.stringify(data, null, 2);
-      } catch (err) {
-        output.textContent = 'Error: ' + err.message;
+      const [lamin, lomin, lamax, lomax] = val.split(',').map(Number);
+      const res = await fetch(`/region?lamin=${lamin}&lomin=${lomin}&lamax=${lamax}&lomax=${lomax}`);
+      const flights = await res.json();
+      clearMarkers();
+      const listDiv = document.getElementById('flight-list');
+      listDiv.innerHTML = '';
+      flights.forEach(f => {
+        addMarker(f);
+        const item = document.createElement('div');
+        item.className = 'flight-item';
+        item.textContent = f.callsign || f.icao24;
+        item.onclick = () => trackFlight(f.callsign || f.icao24);
+        listDiv.appendChild(item);
+      });
+      if (flights.length) {
+        const first = flights[0];
+        map.setView([first.latitude, first.longitude], 6);
+      }
+    }
+    async function trackFlight(callsign) {
+      if (!callsign) return;
+      const res = await fetch(`/track?callsign=${callsign}`);
+      const data = await res.json();
+      alert(JSON.stringify(data, null, 2));
+    }
+    async function trackCallsign() {
+      const callsign = document.getElementById('callsign-input').value.trim();
+      if (callsign) {
+        trackFlight(callsign);
       }
     }
   </script>
